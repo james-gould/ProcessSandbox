@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Description>Shared abstractions and contracts for ProcessSandbox library</Description>
+    <PackageId>ProcessSandbox.Abstractions</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MessagePack" Version="$(MessagePackVersion)" />
+    <PackageReference Include="MessagePack.Annotations" Version="$(MessagePackVersion)" />
+  </ItemGroup>
+
+</Project>
