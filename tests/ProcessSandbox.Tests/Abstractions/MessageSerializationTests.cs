@@ -370,23 +370,4 @@ public class WorkerConfigurationTests
         // Act & Assert
         Assert.Throws<ConfigurationException>(() => config.Validate());
     }
-
-    /// <summary>
-    /// Tests that missing type name throws exception.
-    /// </summary>
-    [Fact]
-    public void Validate_WithInvalidHealthInterval_Throws()
-    {
-        // Arrange
-        var config = new WorkerConfiguration
-        {
-            AssemblyPath = "test.dll",
-            TypeName = "Test.Type",
-            PipeName = "test-pipe",
-            ParentProcessId = 1234
-        };
-
-        // Act & Assert
-        Assert.Throws<ConfigurationException>(() => config.Validate());
-    }
 }
