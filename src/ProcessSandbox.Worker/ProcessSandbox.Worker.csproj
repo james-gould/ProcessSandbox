@@ -5,9 +5,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>ProcessSandbox.Worker</AssemblyName>
     <IsPackable>false</IsPackable>
-    <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
-    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>

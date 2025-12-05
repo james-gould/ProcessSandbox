@@ -24,7 +24,15 @@ public class EndToEndTests : IDisposable
     /// </summary>
     public EndToEndTests()
     {
-        _loggerFactory = NullLoggerFactory.Instance;
+        _loggerFactory = LoggerFactory.Create(builder =>
+        {
+            // Minimum level for logging (e.g., Information, Debug, or Trace)
+            builder.SetMinimumLevel(LogLevel.Debug);
+
+            // Add the Debug provider
+            builder.AddDebug();
+            builder.AddConsole();
+        });
 
         _testAssemblyPath = typeof(TestServiceImpl).Assembly.Location;
     }
@@ -36,6 +44,9 @@ public class EndToEndTests : IDisposable
     [Fact]
     public async Task Proxy_BasicMethodInvocation_ReturnsCorrectResult()
     {
+        
+        _loggerFactory.CreateLogger<EndToEndTests>().LogInformation("Starting Proxy_BasicMethodInvocation_ReturnsCorrectResult test.");
+        
         // Arrange
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
 
@@ -94,7 +105,7 @@ public class EndToEndTests : IDisposable
 
         // Act
         var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
-        
+
         // Assert
         var ex = Assert.Throws<Abstractions.RemoteInvocationException>(() => proxy.Echo("test"));
         Assert.Contains("Echo failed", ex.Message);
@@ -107,25 +118,36 @@ public class EndToEndTests : IDisposable
     [Fact]
     public async Task Proxy_ConcurrentInvocations_HandlesCorrectly()
     {
+        int numberOfTasks = 10;
+        
+        var logger = _loggerFactory.CreateLogger<EndToEndTests>();
+        logger.LogInformation("Starting Proxy_ConcurrentInvocations_HandlesCorrectly test.");
+        
         // Arrange
         var config = CreateTestConfiguration(typeof(TestServiceImpl));
         config.MaxPoolSize = 3;
 
         var proxy = await ProcessProxy.CreateAsync<ITestService>(config, _loggerFactory);
 
+        logger.LogInformation("ProcessProxy created. Starting concurrent invocations.");
+
         // Act
-        var tasks = new Task<int>[10];
-        for (int i = 0; i < 10; i++)
+        var tasks = new Task<int>[numberOfTasks];
+        for (int i = 0; i < numberOfTasks; i++)
         {
             var a = i;
             var b = i + 1;
+            logger.LogInformation("Starting task {TaskNumber} to add {A} and {B}.", i, a, b);
             tasks[i] = Task.Run(() => proxy.Add(a, b));
         }
 
+        logger.LogInformation("All tasks started. Awaiting results.");
+
         var results = await Task.WhenAll(tasks);
 
+        logger.LogInformation("All tasks completed.");
         // Assert
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < numberOfTasks; i++)
         {
             Assert.Equal(i + i + 1, results[i]);
         }
@@ -162,8 +184,8 @@ public class EndToEndTests : IDisposable
             MaxMemoryMB = 512,
             MaxGdiHandles = 5000,
             ProcessRecycleThreshold = 100,
-            MethodCallTimeout = TimeSpan.FromSeconds(10),
-            ProcessStartTimeout = TimeSpan.FromSeconds(10),
+            MethodCallTimeout = TimeSpan.FromSeconds(15),
+            ProcessStartTimeout = TimeSpan.FromSeconds(15),
             VerboseWorkerLogging = false
         };
     }

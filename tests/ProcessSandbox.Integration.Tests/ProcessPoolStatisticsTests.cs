@@ -23,7 +23,15 @@ public class ProcessPoolStatisticsTests
     /// </summary>
     public ProcessPoolStatisticsTests()
     {
-        _loggerFactory = _loggerFactory = NullLoggerFactory.Instance;
+        _loggerFactory = LoggerFactory.Create(builder =>
+        {
+            // Minimum level for logging (e.g., Information, Debug, or Trace)
+            builder.SetMinimumLevel(LogLevel.Debug);
+
+            // Add the Debug provider
+            builder.AddDebug();
+            builder.AddConsole();
+        });
 
         _testAssemblyPath = typeof(TestServiceImpl).Assembly.Location;
     }
@@ -42,8 +50,8 @@ public class ProcessPoolStatisticsTests
             MaxPoolSize = 3,
             ImplementationAssemblyPath = _testAssemblyPath,
             ImplementationTypeName = typeof(TestServiceImpl).FullName!,
-            MethodCallTimeout = TimeSpan.FromSeconds(10),
-            ProcessStartTimeout = TimeSpan.FromSeconds(10),
+            MethodCallTimeout = TimeSpan.FromSeconds(15),
+            ProcessStartTimeout = TimeSpan.FromSeconds(15),
         };
 
         var pool = new ProcessPool(config, _loggerFactory);

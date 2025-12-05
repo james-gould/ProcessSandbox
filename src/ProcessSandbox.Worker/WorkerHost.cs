@@ -59,6 +59,10 @@ public class WorkerHost(WorkerConfiguration config, ILoggerFactory loggerFactory
             // Subscribe to disconnection events
             _channel.Disconnected += OnChannelDisconnected;
 
+            // Send the ready signal after the server is listening
+            _logger.LogInformation("Pipe server ready. Sending READY signal.");
+            Console.WriteLine("PROCESS_SANDBOX_WORKER_READY"); // <-- Worker must output this exact string
+
             // Wait for client connection
             await _channel.WaitForConnectionAsync(_shutdownCts.Token).ConfigureAwait(false);
             _logger.LogInformation("Client connected");

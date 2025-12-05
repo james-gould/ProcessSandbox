@@ -74,7 +74,22 @@ public class ProcessPool : IDisposable
         var tasks = new List<Task>();
         for (int i = 0; i < _config.MinPoolSize; i++)
         {
-            tasks.Add(CreateWorkerAsync(cancellationToken));
+            tasks.Add(Task.Run(async () =>
+            {
+                var worker = await CreateWorkerAsync(cancellationToken);
+
+                await _poolLock.WaitAsync(cancellationToken);
+                try
+                {
+                    _allWorkers.TryAdd(worker.WorkerId, worker);
+                    ReturnWorker(worker);
+                }
+                finally
+                {
+                    _poolLock.Release();
+                }
+                return worker;
+            }));
         }
 
         await Task.WhenAll(tasks);
@@ -161,7 +176,7 @@ public class ProcessPool : IDisposable
             // Try to get an available worker
             if (_availableWorkers.TryTake(out var worker))
             {
-                if (worker.IsHealthy && !worker.IsBusy)
+                if (worker.IsHealthy)
                 {
                     return worker;
                 }
@@ -182,6 +197,9 @@ public class ProcessPool : IDisposable
                         _config.MaxPoolSize);
 
                     var newWorker = await CreateWorkerAsync(cancellationToken);
+
+                    _allWorkers.TryAdd(newWorker.WorkerId, newWorker);
+                    ReturnWorker(newWorker);
                     return newWorker;
                 }
             }

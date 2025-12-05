@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using ProcessSandbox.Abstractions;
 using ProcessSandbox.Abstractions.Messages;
 using ProcessSandbox.IPC;
+using System.Runtime.InteropServices;
 
 namespace ProcessSandbox.Pool;
 
@@ -24,6 +25,8 @@ public class WorkerProcess : IDisposable
     private int _callCount;
     private bool _disposed;
     private readonly SemaphoreSlim _usageLock;
+
+    private TaskCompletionSource<bool> _workerReadyTcs = null!;
 
     /// <summary>
     /// Gets the unique identifier for this worker.
@@ -94,13 +97,13 @@ public class WorkerProcess : IDisposable
             // Generate unique pipe name
             var pipeName = PipeNameGenerator.Generate();
 
-            #if NET48
+#if NET48
                 // This code runs only when compiling for .NET Framework 4.8
                 int currentProcessId = Process.GetCurrentProcess().Id;
-            #else
-                // This code runs when compiling for .NET 8 (or any other modern .NET target)
-                int currentProcessId = Environment.ProcessId;
-            #endif
+#else
+            // This code runs when compiling for .NET 8 (or any other modern .NET target)
+            int currentProcessId = Environment.ProcessId;
+#endif
 
             // Create worker configuration
             var workerConfig = new WorkerConfiguration
@@ -120,16 +123,41 @@ public class WorkerProcess : IDisposable
             var workerExePath = _config.WorkerExecutablePath
                 ?? GetDefaultWorkerExecutablePath();
 
+            // This TCS will be completed when the worker sends its "Ready" signal.
+            _workerReadyTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            string fileName;
+            string arguments;
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // --- Windows Behavior ---
+                // The FileName is the .exe itself, and the arguments are just for the worker app.
+                fileName = workerExePath;
+                arguments = $"--config {configBase64}";
+            }
+            else
+            {
+                // --- macOS/Linux (Unix-like) Behavior ---
+                // The FileName is the 'dotnet' host, and the first argument is the DLL.
+                var workerDllPath = Path.ChangeExtension(workerExePath, ".dll");
+
+                // Note: 'dotnet' must be available in the system's PATH
+                fileName = "dotnet";
+                arguments = $"{workerDllPath} --config {configBase64}";
+            }
+
             // Start the process
             var startInfo = new ProcessStartInfo
             {
-                FileName = workerExePath,
-                Arguments = $"--config {configBase64}",
+                FileName = fileName,
+                Arguments = arguments,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
+
+            _logger.LogDebug("ProcessStartInfo fileName: {fileName}, arguments: {arguments}", fileName, arguments);
 
             _process = new Process { StartInfo = startInfo };
             _process.Exited += OnProcessExited;
@@ -139,13 +167,22 @@ public class WorkerProcess : IDisposable
             _process.OutputDataReceived += (s, e) =>
             {
                 if (!string.IsNullOrEmpty(e.Data))
+                {
+                    if (e.Data.Trim().Equals("PROCESS_SANDBOX_WORKER_READY", StringComparison.Ordinal))
+                    {
+                        _workerReadyTcs.TrySetResult(true);
+                    }
                     _logger.LogDebug("[Worker {WorkerId}] {Output}", _workerId, e.Data);
+                }
             };
 
             _process.ErrorDataReceived += (s, e) =>
             {
                 if (!string.IsNullOrEmpty(e.Data))
-                    _logger.LogWarning("[Worker {WorkerId}] {Error}", _workerId, e.Data);
+                {
+                    _logger.LogError("[Worker {WorkerId}] {Error}", _workerId, e.Data);
+                    Cleanup();
+                }
             };
 
             if (!_process.Start())
@@ -158,6 +195,43 @@ public class WorkerProcess : IDisposable
                 "Worker process started: {WorkerId}, PID: {ProcessId}",
                 _workerId,
                 _process.Id);
+
+            // --- Wait for the worker to signal it is listening on the pipe ---
+            using var startupTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            startupTimeoutCts.CancelAfter(_config.ProcessStartTimeout);
+
+            // Wait for the worker process to report readiness
+            // Wait for the worker process to report readiness
+#if NET48
+            // .NET Framework 4.8 doesn't have Task.WaitAsync.
+            // Use the blocking Task.Wait and manage cancellation manually.
+            try
+            {
+                // Blocking wait for the task to complete
+                _workerReadyTcs.Task.Wait((int)_config.ProcessStartTimeout.TotalMilliseconds, startupTimeoutCts.Token);
+            }
+            catch (AggregateException ex) when (ex.InnerException is TaskCanceledException)
+            {
+                // This catch handles the scenario where the startupTimeoutCts token is cancelled, 
+                // or where the Task.Wait is cancelled. We rethrow as OperationCanceledException 
+                // to match the modern flow.
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException(cancellationToken);
+                }
+                throw new OperationCanceledException(ex.InnerException.Message, ex.InnerException);
+            }
+            catch (TimeoutException ex)
+            {
+                // Task.Wait with timeout can throw TimeoutException if the wait time expires.
+                throw new OperationCanceledException("Connection timed out.", ex);
+            }
+#else
+            // .NET 8.0 (and modern .NET) supports Task.WaitAsync
+            await _workerReadyTcs.Task.WaitAsync(startupTimeoutCts.Token)
+                .ConfigureAwait(false);
+#endif
+            _logger.LogDebug("Worker {WorkerId} signaled readiness. Proceeding to connect.", _workerId);
 
             // Connect to the worker via named pipe
             var client = new NamedPipeClientChannel(pipeName);
@@ -173,6 +247,16 @@ public class WorkerProcess : IDisposable
             _channel.Disconnected += OnChannelDisconnected;
 
             _logger.LogInformation("Worker {WorkerId} connected and ready", _workerId);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException && _process?.HasExited == false)
+        {
+            // Handle timeout on _workerReadyTcs.Task.WaitAsync as a startup failure
+            var workerStartupEx = new WorkerStartupException(
+                $"Worker {_workerId} failed to signal readiness within {_config.ProcessStartTimeout.TotalSeconds} seconds.", ex);
+
+            _logger.LogError(workerStartupEx, "Failed to start worker {WorkerId} (Ready Signal Timeout)", _workerId);
+            Cleanup();
+            throw workerStartupEx;
         }
         catch (Exception ex)
         {
@@ -432,6 +516,8 @@ public class WorkerProcess : IDisposable
             _process.Dispose();
             _process = null;
         }
+
+        _workerReadyTcs?.TrySetCanceled();
     }
 
     /// <summary>
