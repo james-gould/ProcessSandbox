@@ -10,8 +10,7 @@ on:
           type: choice
           options:
             - full-build   # Runs everything (Build, Test, Pack)
-            - pack-only    # Skips Test and runs Pack/Push
-            - push-only    # Skips Build/Test/Pack and only Pushes existing packages
+            - skip-tests    # Skips Test and runs Pack/Push
   push:
     branches: [ main, develop ]
   pull_request:
@@ -37,11 +36,9 @@ jobs:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     
     - name: Restore dependencies
-      if: github.event_name != 'workflow_dispatch' || (github.event.inputs.action_mode != 'push-only')
       run: dotnet restore
     
     - name: Build
-      if: github.event_name != 'workflow_dispatch' || (github.event.inputs.action_mode == 'full-build')
       run: dotnet build --configuration Release --no-restore
     
     - name: Test
@@ -49,15 +46,15 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage"
     
     - name: Pack
-      if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["full-build", "pack-only"]'), github.event.inputs.action_mode))
+      if: (github.ref == 'refs/heads/main') 
       run: dotnet pack --configuration Release --no-build --output ${{ github.workspace }}\artifacts
 
     - name: Push to NuGet.org
-      if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["full-build", "pack-only", "push-only"]'), github.event.inputs.action_mode))
+      if: (github.ref == 'refs/heads/main') 
       run: dotnet nuget push ${{ github.workspace }}\artifacts\*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
     
     - name: Upload artifacts
-      if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["full-build", "pack-only"]'), github.event.inputs.action_mode))
+      if: (github.ref == 'refs/heads/main') 
       uses: actions/upload-artifact@v4
       with:
         name: nuget-packages
