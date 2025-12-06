@@ -2,16 +2,16 @@ name: Build and Test
 
 on:
   workflow_dispatch:
-  inputs:
-      action_mode:
-        description: 'Choose the action mode'
-        required: true
-        default: 'full-build'
-        type: choice
-        options:
-          - full-build   # Runs everything (Build, Test, Pack)
-          - pack-only    # Skips Test and runs Pack/Push
-          - push-only    # Skips Build/Test/Pack and only Pushes existing packages
+    inputs:
+        action_mode:
+          description: 'Choose the action mode'
+          required: true
+          default: 'full-build'
+          type: choice
+          options:
+            - full-build   # Runs everything (Build, Test, Pack)
+            - pack-only    # Skips Test and runs Pack/Push
+            - push-only    # Skips Build/Test/Pack and only Pushes existing packages
   push:
     branches: [ main, develop ]
   pull_request:
