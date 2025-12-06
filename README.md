@@ -33,7 +33,7 @@ You have legacy code that:
 ### Installation
 
 ```bash
-dotnet add package ProcessSandbox
+dotnet add package ProcessSandbox.Runner
 ```
 
 ### Basic Usage
