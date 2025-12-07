@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net48</TargetFramework>
     <AssemblyName>ProcessSandbox.Worker.Net48</AssemblyName>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
@@ -22,22 +22,5 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
   </ItemGroup>
-
-  <Target Name="AddWorkerAssetsToPackage" AfterTargets="Build">
-      <ItemGroup>
-          <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker.deps.json" />
-          <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker.runtimeconfig.json" />
-          <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker" />
-          <WorkerHostFiles Include="$(TargetDir)ProcessSandbox.Worker.exe" />
-      </ItemGroup>
-
-      <ItemGroup>
-          <Content Include="@(WorkerHostFiles)"
-                  Condition="Exists('%(Identity)')"
-                  CopyToOutputDirectory="PreserveNewest"
-                  PackageCopyToOutput="true"
-                  PackagePath="contentFiles/any/any/%(Filename)%(Extension)" />
-      </ItemGroup>
-  </Target>
 
 </Project>
