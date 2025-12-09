@@ -84,7 +84,7 @@ var config = new ProcessPoolConfiguration
     MaxPoolSize = 5,              // Scale up to 5 workers
     
     // Worker process
-    Use32BitWorker = true,        // Use 32-bit for COM
+    UseDotNetFrameworkWorker = true,        // Use a 32-bit framework dll for COM
     WorkerAssembly = "MyLegacy.dll",
     WorkerType = "MyLegacy.ServiceImpl",
     
@@ -104,7 +104,7 @@ var config = new ProcessPoolConfiguration
 ```csharp
 var config = new ProcessPoolConfiguration
 {
-    Use32BitWorker = true,
+    UseDotNetFrameworkWorker = true,
     MaxMemoryMB = 1024,  // well within 32-bit limit
     MaxGdiHandles = 10000
 };

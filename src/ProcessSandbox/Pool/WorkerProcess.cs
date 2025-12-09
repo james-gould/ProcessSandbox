@@ -119,31 +119,21 @@ public class WorkerProcess : IDisposable
             var configBytes = MessagePack.MessagePackSerializer.Serialize(workerConfig);
             var configBase64 = Convert.ToBase64String(configBytes);
 
-            // Determine worker executable path
-            var workerExePath = _config.WorkerExecutablePath
-                ?? GetDefaultWorkerExecutablePath();
-
             // This TCS will be completed when the worker sends its "Ready" signal.
             _workerReadyTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             string fileName;
             string arguments;
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            if (_config.UseDotNetFrameworkWorker)
             {
-                // --- Windows Behavior ---
-                // The FileName is the .exe itself, and the arguments are just for the worker app.
-                fileName = workerExePath;
+                fileName = Path.Combine(AppContext.BaseDirectory, "ProcessSandbox.Worker.Net48.exe");
                 arguments = $"--config {configBase64}";
             }
             else
             {
-                // --- macOS/Linux (Unix-like) Behavior ---
-                // The FileName is the 'dotnet' host, and the first argument is the DLL.
-                var workerDllPath = Path.ChangeExtension(workerExePath, ".dll");
-
                 // Note: 'dotnet' must be available in the system's PATH
                 fileName = "dotnet";
-                arguments = $"{workerDllPath} --config {configBase64}";
+                arguments = $"{Path.Combine(AppContext.BaseDirectory, "ProcessSandbox.Worker.dll")} --config {configBase64}";
             }
 
             // Start the process
@@ -463,17 +453,6 @@ public class WorkerProcess : IDisposable
         }
 
         Cleanup();
-    }
-
-    private string GetDefaultWorkerExecutablePath()
-    {
-        // TODO: In production, this should locate the bundled worker executable
-        // For now, assume it's in the same directory or a known location
-        var exeName = _config.Use32BitWorker
-            ? "ProcessSandbox.Worker.Net48.exe"
-            : "ProcessSandbox.Worker.exe";
-
-        return System.IO.Path.Combine(AppContext.BaseDirectory, exeName);
     }
 
     private void OnProcessExited(object? sender, EventArgs e)

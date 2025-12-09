@@ -27,7 +27,7 @@ public class ProcessPoolConfiguration
     /// Gets or sets whether to use a 32-bit worker process.
     /// Useful for COM interop scenarios.
     /// </summary>
-    public bool Use32BitWorker { get; set; } = false;
+    public bool UseDotNetFrameworkWorker { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the path to the assembly containing the implementation.
@@ -142,7 +142,7 @@ public class ProcessPoolConfiguration
             MinPoolSize = MinPoolSize,
             MaxPoolSize = MaxPoolSize,
             WorkerExecutablePath = WorkerExecutablePath,
-            Use32BitWorker = Use32BitWorker,
+            UseDotNetFrameworkWorker = UseDotNetFrameworkWorker,
             ImplementationAssemblyPath = ImplementationAssemblyPath,
             ImplementationTypeName = ImplementationTypeName,
             MaxMemoryMB = MaxMemoryMB,
